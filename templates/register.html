@@ -2,10 +2,17 @@
 <html lang="uz">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talaba qo'shish</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #f8fafc; color: #334155; }
-        .card { background: white; border: 1px solid #e2e8f0; border-radius: 2rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 2rem;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.08);
+        }
     </style>
 </head>
 <body class="p-6 md:p-12">
@@ -16,26 +23,49 @@
 
             <div class="relative w-48 h-48 mx-auto mb-8 border-4 border-white shadow-lg rounded-full overflow-hidden bg-slate-100">
                 <video id="video" class="w-full h-full object-cover scale-x-[-1]" autoplay muted playsinline></video>
+
+                <div class="absolute inset-0 rounded-full border-[6px] border-white/40 pointer-events-none"></div>
+                <div class="absolute inset-3 rounded-full border-2 border-dashed border-indigo-300 pointer-events-none"></div>
             </div>
 
             <div class="space-y-4">
-                <input type="text" id="name" placeholder="Ism va familiya" 
-                    class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-400 outline-none transition-all">
-                
-                <button onclick="saveStudent()" class="w-full py-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100">
+                <input
+                    type="text"
+                    id="name"
+                    placeholder="Ism va familiya"
+                    class="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-400 outline-none transition-all"
+                >
+
+                <button
+                    type="button"
+                    onclick="saveStudent()"
+                    class="w-full py-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 transition"
+                >
                     Saqlash
                 </button>
-                <a href="{% url 'login' %}" class="block text-center text-slate-400 text-sm hover:text-slate-600 transition-colors">Orqaga qaytish</a>
+
+                <a
+                    href="{% url 'login' %}"
+                    class="block text-center text-slate-400 text-sm hover:text-slate-600 transition-colors"
+                >
+                    Orqaga qaytish
+                </a>
             </div>
-            <div id="statusBox" class="mt-6 text-center text-sm text-slate-500 font-medium"></div>
+
+            <div id="statusBox" class="mt-6 text-center text-sm text-slate-500 font-medium">
+                Kamera ishga tushmoqda...
+            </div>
         </div>
 
         <div class="card p-8">
             <h2 class="text-lg font-bold mb-6 text-slate-700 border-b pb-4">Ro'yxatdagilar</h2>
+
             <div class="space-y-3 overflow-y-auto max-h-[400px] pr-2">
                 {% for student in students %}
                 <div class="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
-                    <div class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">{{ student.name|slice:":1" }}</div>
+                    <div class="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center font-bold">
+                        {{ student.name|slice:":1" }}
+                    </div>
                     <div>
                         <p class="font-bold text-slate-700 text-sm">{{ student.name }}</p>
                         <p class="text-xs text-slate-400">ID: {{ student.sid }}</p>
@@ -47,6 +77,125 @@
             </div>
         </div>
     </div>
+
     <canvas id="canvas" width="400" height="300" class="hidden"></canvas>
-    </body>
+
+    <script>
+        const vid = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusBox = document.getElementById('statusBox');
+        let currentStream = null;
+
+        function setStatus(text, type = "normal") {
+            statusBox.textContent = text;
+
+            statusBox.className = "mt-6 text-center text-sm font-medium";
+            if (type === "ok") {
+                statusBox.classList.add("text-emerald-600");
+            } else if (type === "err") {
+                statusBox.classList.add("text-red-500");
+            } else {
+                statusBox.classList.add("text-slate-500");
+            }
+        }
+
+        async function startCamera() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    setStatus("Brauzer kamerani qo‘llamaydi.", "err");
+                    return;
+                }
+
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                setStatus("Kameraga ulanmoqda...");
+
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: "user"
+                    },
+                    audio: false
+                });
+
+                currentStream = stream;
+                vid.srcObject = stream;
+
+                await vid.play();
+                setStatus("Kamera tayyor. Endi saqlashingiz mumkin.");
+            } catch (error) {
+                setStatus("Kamera ochilmadi. Brauzer ruxsatini tekshiring.", "err");
+                console.error("Camera error:", error);
+            }
+        }
+
+        function captureFrame() {
+            if (!vid.videoWidth || !vid.videoHeight) {
+                return null;
+            }
+
+            canvas.width = vid.videoWidth;
+            canvas.height = vid.videoHeight;
+
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(vid, -canvas.width, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            return canvas.toDataURL('image/jpeg', 0.92);
+        }
+
+        async function saveStudent() {
+            const name = document.getElementById('name').value.trim();
+
+            if (!name) {
+                setStatus("Avval talaba ismini kiriting.", "err");
+                return;
+            }
+
+            const image = captureFrame();
+
+            if (!image) {
+                setStatus("Kameradan rasm olinmadi. Biroz kutib qayta urinib ko‘ring.", "err");
+                return;
+            }
+
+            setStatus("Rasm olinmoqda va saqlanmoqda...");
+
+            const formData = new URLSearchParams();
+            formData.append('name', name);
+            formData.append('image', image);
+
+            try {
+                const response = await fetch('{% url "add_student" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
+                    body: formData.toString()
+                });
+
+                const data = await response.json();
+
+                if (data.ok) {
+                    setStatus(`${data.message} ID: ${data.sid}`, "ok");
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 900);
+                } else {
+                    setStatus(data.error || "Saqlashda xatolik yuz berdi.", "err");
+                }
+            } catch (error) {
+                setStatus("Server bilan ulanishda xatolik.", "err");
+                console.error("Save error:", error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', startCamera);
+        window.addEventListener('pageshow', startCamera);
+    </script>
+</body>
 </html>
