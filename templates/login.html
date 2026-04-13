@@ -6,8 +6,12 @@
     <title>Face ID Login</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #f0f2f5; } /* Ochiq fon */
-        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); }
+        body { background-color: #f0f2f5; }
+        .glass {
+            background: rgba(255, 255, 255, 0.72);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+        }
     </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-6 text-slate-700">
@@ -19,68 +23,154 @@
 
         <div class="relative w-64 h-64 mx-auto mb-10">
             <div class="absolute inset-0 rounded-full border-[6px] border-white shadow-inner overflow-hidden bg-slate-200">
-                <video id="video" class="w-full h-full object-cover scale-x-[-1]" autoplay muted playsinline></video>
-                <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-blue-400/20 to-transparent animate-[pulse_2s_infinite]"></div>
+                <video
+                    id="video"
+                    class="w-full h-full object-cover scale-x-[-1]"
+                    autoplay
+                    muted
+                    playsinline
+                ></video>
+
+                <div class="absolute inset-0 bg-gradient-to-b from-blue-400/20 to-transparent animate-pulse"></div>
+                <div class="absolute inset-3 rounded-full border-2 border-dashed border-blue-300/80 pointer-events-none"></div>
             </div>
         </div>
 
-        <div id="statusBox" class="text-center py-3 px-4 rounded-xl bg-slate-100 text-slate-600 mb-6 text-sm font-medium">
+        <div
+            id="statusBox"
+            class="text-center py-3 px-4 rounded-xl bg-slate-100 text-slate-600 mb-6 text-sm font-medium border border-slate-200"
+        >
             Kamera tayyorlanmoqda...
         </div>
 
         <div class="space-y-3">
-            <button onclick="scan()" class="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl font-bold shadow-md shadow-blue-200 transition-all active:scale-95">
+            <button
+                type="button"
+                onclick="scan()"
+                class="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl font-bold shadow-md shadow-blue-200 transition-all active:scale-95"
+            >
                 Skanerlash
             </button>
-            <a href="{% url 'register' %}" class="block text-center w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-medium hover:bg-slate-50 transition-all">
+
+            <a
+                href="{% url 'register' %}"
+                class="block text-center w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-medium hover:bg-slate-50 transition-all"
+            >
                 Ro'yxatdan o'tish
             </a>
         </div>
+
         <canvas id="canvas" width="400" height="300" class="hidden"></canvas>
     </div>
 
     <script>
-        // JS qismi o'sha-o'sha qoladi, faqat setStatus dagi ranglarni moslashtirish kerak
         const vid = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const statusBox = document.getElementById('statusBox');
+        let currentStream = null;
 
         function setStatus(type, text) {
             statusBox.textContent = text;
-            if(type === 'ok') statusBox.className = "text-center py-3 px-4 rounded-xl bg-emerald-50 text-emerald-600 mb-6 text-sm font-medium border border-emerald-100";
-            else if(type === 'err') statusBox.className = "text-center py-3 px-4 rounded-xl bg-red-50 text-red-600 mb-6 text-sm font-medium border border-red-100";
-            else statusBox.className = "text-center py-3 px-4 rounded-xl bg-blue-50 text-blue-600 mb-6 text-sm font-medium border border-blue-100";
+
+            if (type === 'ok') {
+                statusBox.className =
+                    "text-center py-3 px-4 rounded-xl bg-emerald-50 text-emerald-600 mb-6 text-sm font-medium border border-emerald-100";
+            } else if (type === 'err') {
+                statusBox.className =
+                    "text-center py-3 px-4 rounded-xl bg-red-50 text-red-600 mb-6 text-sm font-medium border border-red-100";
+            } else {
+                statusBox.className =
+                    "text-center py-3 px-4 rounded-xl bg-blue-50 text-blue-600 mb-6 text-sm font-medium border border-blue-100";
+            }
         }
 
         async function startCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    setStatus('err', 'Brauzer kamera funksiyasini qo‘llamaydi');
+                    return;
+                }
+
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                setStatus('info', 'Kameraga ulanmoqda...');
+
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user' },
+                    audio: false
+                });
+
+                currentStream = stream;
                 vid.srcObject = stream;
-                setStatus('info', 'Kameraga qarang');
-            } catch (e) { setStatus('err', 'Kamera topilmadi'); }
+                await vid.play();
+
+                setStatus('info', 'Kameraga qarang va skanerlashni bosing');
+            } catch (e) {
+                console.error('Camera error:', e);
+                setStatus('err', 'Kamera topilmadi yoki ruxsat berilmagan');
+            }
         }
-        
+
+        function captureFrame() {
+            if (!vid.videoWidth || !vid.videoHeight) {
+                return null;
+            }
+
+            canvas.width = vid.videoWidth;
+            canvas.height = vid.videoHeight;
+
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(vid, -canvas.width, 0, canvas.width, canvas.height);
+            ctx.restore();
+
+            return canvas.toDataURL('image/jpeg', 0.9);
+        }
+
         async function scan() {
+            const image = captureFrame();
+
+            if (!image) {
+                setStatus('err', 'Kameradan rasm olinmadi. Biroz kutib qayta urinib ko‘ring');
+                return;
+            }
+
             setStatus('info', 'Aniqlanmoqda...');
-            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-            const image = canvas.toDataURL('image/jpeg', 0.9);
+
             const formData = new URLSearchParams();
             formData.append('image', image);
+
             try {
                 const response = await fetch('{% url "verify_face" %}', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    },
                     body: formData.toString()
                 });
+
                 const data = await response.json();
+
                 if (data.ok) {
-                    setStatus('ok', 'Tasdiqlandi!');
-                    setTimeout(() => window.location.href = '{% url "dashboard" %}', 1000);
-                } else { setStatus('err', data.error || 'Topilmadi'); }
-            } catch (e) { setStatus('err', 'Xatolik yuz berdi'); }
+                    setStatus('ok', `Tasdiqlandi: ${data.name} (${data.sid})`);
+
+                    setTimeout(() => {
+                        window.location.href = '{% url "dashboard" %}';
+                    }, 1000);
+                } else {
+                    setStatus('err', data.error || 'Bu yuz ro‘yxatdan o‘tmagan');
+                }
+            } catch (e) {
+                console.error('Scan error:', e);
+                setStatus('err', 'Server bilan bog‘lanishda xatolik yuz berdi');
+            }
         }
-        window.onload = startCamera;
+
+        document.addEventListener('DOMContentLoaded', startCamera);
+        window.addEventListener('pageshow', startCamera);
     </script>
 </body>
 </html>
