@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face ID Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f0f2f5; } /* Ochiq fon */
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3); }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-6 text-slate-700">
+    <div class="max-w-md w-full glass p-10 rounded-[2.5rem] shadow-xl">
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-slate-800 tracking-tight">Xush kelibsiz</h1>
+            <p class="text-slate-500 mt-2">Face ID orqali tizimga kiring</p>
+        </div>
+
+        <div class="relative w-64 h-64 mx-auto mb-10">
+            <div class="absolute inset-0 rounded-full border-[6px] border-white shadow-inner overflow-hidden bg-slate-200">
+                <video id="video" class="w-full h-full object-cover scale-x-[-1]" autoplay muted playsinline></video>
+                <div class="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-blue-400/20 to-transparent animate-[pulse_2s_infinite]"></div>
+            </div>
+        </div>
+
+        <div id="statusBox" class="text-center py-3 px-4 rounded-xl bg-slate-100 text-slate-600 mb-6 text-sm font-medium">
+            Kamera tayyorlanmoqda...
+        </div>
+
+        <div class="space-y-3">
+            <button onclick="scan()" class="w-full py-4 bg-blue-500 hover:bg-blue-600 text-white rounded-2xl font-bold shadow-md shadow-blue-200 transition-all active:scale-95">
+                Skanerlash
+            </button>
+            <a href="{% url 'register' %}" class="block text-center w-full py-4 bg-white border border-slate-200 text-slate-600 rounded-2xl font-medium hover:bg-slate-50 transition-all">
+                Ro'yxatdan o'tish
+            </a>
+        </div>
+        <canvas id="canvas" width="400" height="300" class="hidden"></canvas>
+    </div>
+
+    <script>
+        // JS qismi o'sha-o'sha qoladi, faqat setStatus dagi ranglarni moslashtirish kerak
+        const vid = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusBox = document.getElementById('statusBox');
+
+        function setStatus(type, text) {
+            statusBox.textContent = text;
+            if(type === 'ok') statusBox.className = "text-center py-3 px-4 rounded-xl bg-emerald-50 text-emerald-600 mb-6 text-sm font-medium border border-emerald-100";
+            else if(type === 'err') statusBox.className = "text-center py-3 px-4 rounded-xl bg-red-50 text-red-600 mb-6 text-sm font-medium border border-red-100";
+            else statusBox.className = "text-center py-3 px-4 rounded-xl bg-blue-50 text-blue-600 mb-6 text-sm font-medium border border-blue-100";
+        }
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                vid.srcObject = stream;
+                setStatus('info', 'Kameraga qarang');
+            } catch (e) { setStatus('err', 'Kamera topilmadi'); }
+        }
+        
+        async function scan() {
+            setStatus('info', 'Aniqlanmoqda...');
+            ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+            const image = canvas.toDataURL('image/jpeg', 0.9);
+            const formData = new URLSearchParams();
+            formData.append('image', image);
+            try {
+                const response = await fetch('{% url "verify_face" %}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData.toString()
+                });
+                const data = await response.json();
+                if (data.ok) {
+                    setStatus('ok', 'Tasdiqlandi!');
+                    setTimeout(() => window.location.href = '{% url "dashboard" %}', 1000);
+                } else { setStatus('err', data.error || 'Topilmadi'); }
+            } catch (e) { setStatus('err', 'Xatolik yuz berdi'); }
+        }
+        window.onload = startCamera;
+    </script>
+</body>
+</html>
